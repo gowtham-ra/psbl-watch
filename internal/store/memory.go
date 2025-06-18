@@ -1,25 +1,33 @@
 package store
 
-import "sync"
+import (
+	"sync"
+)
 
-// memoryCache holds the most recent GameStatus observed. It is safe for
-// concurrent access by multiple goroutines.
+// memoryCache holds the most recent GameStatus observed for each TargetGame.
+// It is safe for concurrent access by multiple goroutines.
 var memoryCache struct {
-	mu     sync.RWMutex
-	status *GameStatus
+	mu       sync.RWMutex
+	statuses map[string]*GameStatus
 }
 
-// SaveGameStatus stores the latest GameStatus in the cache.
+func init() {
+	memoryCache.statuses = make(map[string]*GameStatus)
+}
+
+// SaveGameStatus stores/updates the latest GameStatus for its corresponding
+// TargetGame in the cache.
 func SaveGameStatus(s *GameStatus) {
 	memoryCache.mu.Lock()
 	defer memoryCache.mu.Unlock()
-	memoryCache.status = s
+	key := s.Target.GameKey
+	memoryCache.statuses[key] = s
 }
 
-// GetGameStatus retrieves the previously stored GameStatus (if any).
-// It returns nil if no GameStatus has been cached yet.
-func GetGameStatus() *GameStatus {
+// GetGameStatus retrieves the previously stored GameStatus for the provided
+// TargetGame. It returns nil if no GameStatus has been cached yet.
+func GetGameStatus(key string) *GameStatus {
 	memoryCache.mu.RLock()
 	defer memoryCache.mu.RUnlock()
-	return memoryCache.status
+	return memoryCache.statuses[key]
 }

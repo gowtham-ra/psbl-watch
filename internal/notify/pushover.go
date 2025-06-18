@@ -21,9 +21,9 @@ func SendPushover(message string) {
 	msg.URLTitle = "View Game"
 	msg.URL = "https://mobile.pugetsoundbasketball.com/"
 
-	res, err := app.SendMessage(msg, user)
+	_, err := app.SendMessage(msg, user)
 	if err != nil {
 		log.Printf("Error sending Pushover message: %v", err)
 	}
-	log.Printf("Sent push notification. Response: %v", res)
+	log.Println("Sent push notification!")
 }

@@ -18,14 +18,6 @@ import (
 	"github.com/gowtham-ra/psbl-watch/internal/store"
 )
 
-// targetGame represents the game we are interested in tracking.
-var targetGame = store.TargetGame{
-	Gym:      "Seattle Central College #1",
-	Type:     "Saturday Morning Hoops",
-	Level:    "Recreational-CoEd",
-	DateTime: time.Date(2025, 6, 21, 10, 0, 0, 0, time.Local),
-}
-
 func main() {
 	log.Println("Starting PSBL Game Watcher (scheduled every 3 minutes)...")
 
@@ -57,37 +49,47 @@ func watchOnce() {
 		return
 	}
 
-	// Parse the Game Status from the fetched HTML data.
-	gameStatus, err := parse.GameStatusData(data, targetGame)
+	// targetGame represents the game we are interested in tracking.
+	targetGame := store.TargetGame{
+		Gym:      "Seattle Central College #1", // TODO: Make this configurable
+		Type:     "Saturday Morning Hoops",     
+		Level:    "Recreational-CoEd",       
+	}
+
+	// Parse the required games' status from the HTML data.
+	gameStatuses, err := parse.GameStatusData(data, targetGame)
 	if err != nil {
 		log.Printf("failed to parse: %v", err)
 		return
 	}
 
-	// Only send a push notification if the game status has changed.
-	prev := store.GetGameStatus()
-	if prev != nil && !gameStatusChanged(prev, gameStatus) {
-		log.Println("No change in game status - skipping push notification.")
-		return
+	// Process each game status individually.
+	for _, gameStatus := range gameStatuses {
+		// Only send a push notification if the game status has changed.
+		prev := store.GetGameStatus(gameStatus.Target.GameKey)
+		if prev != nil && !gameStatusChanged(prev, gameStatus) {
+			log.Println("No change in game status - skip push notification")
+			continue
+		}
+
+		// Format the push notification message.
+		message := fmt.Sprintf("%s\n"+
+			"%s\n"+
+			"%s\n"+
+			"%s\n"+
+			"%s\n",
+			gameStatus.Target.Gym,
+			gameStatus.Target.Type,
+			gameStatus.Target.Level,
+			gameStatus.Target.DateTime.In(time.FixedZone("PST", -7*3600)).Format("Monday, January 2 at 3:04 PM"),
+			formatPlayers(gameStatus.Players))
+
+		// Send a push notification using Pushover.
+		notify.SendPushover(message)
+
+		// Update the cache with the latest game status.
+		store.SaveGameStatus(gameStatus)
 	}
-
-	// Format the push notification message.
-	message := fmt.Sprintf("%s\n"+
-		"%s\n"+
-		"%s\n"+
-		"%s\n"+
-		"%s\n",
-		gameStatus.Target.Gym,
-		gameStatus.Target.Type,
-		gameStatus.Target.Level,
-		gameStatus.Target.DateTime.In(time.FixedZone("PST", -7*3600)).Format("Monday, January 2 at 3:04 PM"),
-		formatPlayers(gameStatus.Players))
-
-	// Send a push notification using Pushover.
-	notify.SendPushover(message)
-
-	// Update the cache with the latest game status.
-	store.SaveGameStatus(gameStatus)
 }
 
 func formatPlayers(players map[string][]string) string {

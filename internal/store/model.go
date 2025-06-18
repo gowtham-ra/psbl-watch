@@ -4,6 +4,7 @@ import "time"
 
 // Which game are *you* watching?
 type TargetGame struct {
+	GameKey  string    // "Key used to identify the game in the cache"
 	Gym      string    // "Seattle Central College #1"
 	Type     string    // "Saturday Morning Hoops"
 	Level    string    // "Recreational-CoEd"

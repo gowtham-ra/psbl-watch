@@ -11,19 +11,15 @@ import (
 	"github.com/gowtham-ra/psbl-watch/internal/store"
 )
 
-func GameStatusData(data *fetch.Result, targetGame store.TargetGame) (*store.GameStatus, error) {
-	status := store.GameStatus{
-		Target:     targetGame,
-		Found:      false,
-		IsFull:     false,
-		ObservedAt: time.Now(),
-	}
+func GameStatusData(data *fetch.Result, targetGame store.TargetGame) ([]*store.GameStatus, error) {
+	var statuses []*store.GameStatus
 
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(data.Body))
 	if err != nil {
 		return nil, err
 	}
 
+	log.Printf("Total games: %d", doc.Find("div.mobilehod").Length())
 	doc.Find("div.mobilehod").EachWithBreak(func(_ int, s *goquery.Selection) bool {
 		// Get the game info details from the header
 		gameInfoHeader := strings.TrimSpace(s.Find("#gameinfo div").First().Text())
@@ -48,18 +44,31 @@ func GameStatusData(data *fetch.Result, targetGame store.TargetGame) (*store.Gam
 		}
 
 		// Check if the game time is the same as the target game time
-		t, err := getGameTime(timeStr, targetGame)
+		t, err := getGameTime(timeStr)
 		if err != nil {
+			log.Printf("Error parsing time %s: %v", timeStr, err)
 			return true
 		}
 
-		if !t.Equal(targetGame.DateTime) {
+		if !targetGame.DateTime.IsZero() && !t.Equal(targetGame.DateTime) {
 			return true
 		}
 
 		// If we are here, we have found the game
-		log.Println("Found the game 🏀")
-		status.Found = true
+		log.Printf("Found Game: %s %s %s %s 🏀", gym, gameType, gameLevel, timeStr)
+
+		status := store.GameStatus{
+			Target:     targetGame,
+			Found:      true,
+			IsFull:     false,
+			ObservedAt: time.Now(),
+		}
+		// If the game time is not set, set it to the game time
+		// so that we can use it as key in the cache.
+		if targetGame.DateTime.IsZero() {
+			status.Target.DateTime = t
+		}
+
 		status.Players = getPlayers(s)
 		for _, players := range status.Players {
 			status.TotalPlayers += len(players)
@@ -67,15 +76,17 @@ func GameStatusData(data *fetch.Result, targetGame store.TargetGame) (*store.Gam
 		status.IsFull = isGameFull(s, &status)
 
 		if status.IsFull {
-			log.Println("Game is full, no spots available 😢")
+			log.Println("Game is full 🔴")
+		} else {
+			log.Println("Game has free spots 🟢")
 		}
 
-		log.Printf("Game status: %+v", status)
-
-		return false // break
+		status.Target.GameKey = uniqueGameKey(&status)
+		statuses = append(statuses, &status)
+		return true
 	})
 
-	return &status, nil
+	return statuses, nil
 }
 
 // isGameFull checks if the game is full or if the total number of players is >= 14
@@ -93,14 +104,14 @@ func isGameFull(s *goquery.Selection, gameStatus *store.GameStatus) bool {
 }
 
 // getGameTime parses the game time from the time string and returns the time in the target game's timezone
-func getGameTime(timeStr string, targetGame store.TargetGame) (time.Time, error) {
+func getGameTime(timeStr string) (time.Time, error) {
 	t, err := time.Parse("Mon, January 2 3:04pm", timeStr)
 	if err != nil {
 		log.Printf("Error parsing time %s: %v", timeStr, err)
 		return time.Now(), err
 	}
 	loc, _ := time.LoadLocation("America/Los_Angeles")
-	t = time.Date(targetGame.DateTime.Year(), t.Month(), t.Day(),
+	t = time.Date(2025, t.Month(), t.Day(),
 		t.Hour(), t.Minute(), 0, 0, loc)
 
 	return t, nil
@@ -131,4 +142,24 @@ func getPlayers(s *goquery.Selection) map[string][]string {
 	})
 
 	return players
+}
+
+// uniqueGameKey returns a unique, deterministic key for the given GameStatus so
+// that we can cache a GameStatus for every different game we are tracking.
+// The key is a combination of the gym, type, level, date/time, and team names.
+func uniqueGameKey(status *store.GameStatus) string {
+	return status.Target.Gym + 
+	"|" + status.Target.Type + 
+	"|" + status.Target.Level + 
+	"|" + status.Target.DateTime.In(time.UTC).Format(time.RFC3339) +
+	"|" + strings.Join(getMapKeys(status.Players), ",") // Team names
+}
+
+// getMapKeys returns the keys of a map as a comma-separated string
+func getMapKeys(m map[string][]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
