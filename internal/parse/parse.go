@@ -60,13 +60,17 @@ func GameStatusData(data *fetch.Result, targetGame store.TargetGame) (*store.Gam
 		// If we are here, we have found the game
 		log.Println("Found the game 🏀")
 		status.Found = true
-
 		status.Players = getPlayers(s)
-		status.IsFull = isGameFull(s, status.Players)
-		
+		for _, players := range status.Players {
+			status.TotalPlayers += len(players)
+		}
+		status.IsFull = isGameFull(s, &status)
+
 		if status.IsFull {
 			log.Println("Game is full, no spots available 😢")
 		}
+
+		log.Printf("Game status: %+v", status)
 
 		return false // break
 	})
@@ -74,21 +78,14 @@ func GameStatusData(data *fetch.Result, targetGame store.TargetGame) (*store.Gam
 	return &status, nil
 }
 
-// isGameFull checks if the game is full by checking if the game is full or if both teams are full
-func isGameFull(s *goquery.Selection, players map[string][]string) bool {
+// isGameFull checks if the game is full or if the total number of players is >= 14
+func isGameFull(s *goquery.Selection, gameStatus *store.GameStatus) bool {
 	gameFull := false
 	if s.Find("a:contains('FULL')").Length() > 0 {
 		gameFull = true
 	}
 
-	var fullTeams int
-	for _, team := range players {
-		if len(team) >= 7 {
-			fullTeams++
-		}
-	}
-
-	if fullTeams == 2 {
+	if gameStatus.TotalPlayers >= 14 {
 		gameFull = true
 	}
 
@@ -105,7 +102,7 @@ func getGameTime(timeStr string, targetGame store.TargetGame) (time.Time, error)
 	loc, _ := time.LoadLocation("America/Los_Angeles")
 	t = time.Date(targetGame.DateTime.Year(), t.Month(), t.Day(),
 		t.Hour(), t.Minute(), 0, 0, loc)
-	
+
 	return t, nil
 }
 

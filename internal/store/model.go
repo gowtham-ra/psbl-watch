@@ -16,5 +16,6 @@ type GameStatus struct {
 	IsFull     bool
 	Found      bool // false => game not yet posted
 	Players    map[string][]string
+	TotalPlayers int // total number of players
 	ObservedAt time.Time
 }
