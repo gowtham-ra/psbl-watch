@@ -1,4 +1,4 @@
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.24.4-bookworm AS builder
 WORKDIR /src
 
 # Cache Go modules first (leverages Docker layer caching)
