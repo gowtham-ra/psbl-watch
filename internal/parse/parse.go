@@ -3,6 +3,7 @@ package parse
 import (
 	"bytes"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -128,7 +129,7 @@ func getPlayers(s *goquery.Selection) map[string][]string {
 		teamName := strings.TrimSpace(teamDiv.Find("span.team_name").Text())
 		var playerNames []string
 
-		// Find all player names for this team
+		// Find all player names for this team in document order
 		teamDiv.Find("span.player_name").Each(func(_ int, player *goquery.Selection) {
 			playerName := strings.TrimSpace(player.Text())
 			// Remove the number prefix (e.g., "1. ")
@@ -137,6 +138,10 @@ func getPlayers(s *goquery.Selection) map[string][]string {
 			}
 			playerNames = append(playerNames, playerName)
 		})
+
+		// Ensure a deterministic ordering of the slice so that re-ordering in the DOM
+		// does not trigger false positive notifications.
+		sort.Strings(playerNames)
 
 		players[teamName] = playerNames
 	})
@@ -148,11 +153,11 @@ func getPlayers(s *goquery.Selection) map[string][]string {
 // that we can cache a GameStatus for every different game we are tracking.
 // The key is a combination of the gym, type, level, date/time, and team names.
 func uniqueGameKey(status *store.GameStatus) string {
-	return status.Target.Gym + 
-	"|" + status.Target.Type + 
-	"|" + status.Target.Level + 
-	"|" + status.Target.DateTime.In(time.UTC).Format(time.RFC3339) +
-	"|" + strings.Join(getMapKeys(status.Players), ",") // Team names
+	return status.Target.Gym +
+		"|" + status.Target.Type +
+		"|" + status.Target.Level +
+		"|" + status.Target.DateTime.In(time.UTC).Format(time.RFC3339) +
+		"|" + strings.Join(getMapKeys(status.Players), ",") // Team names
 }
 
 // getMapKeys returns the keys of a map as a comma-separated string
@@ -161,5 +166,7 @@ func getMapKeys(m map[string][]string) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
+	// Sort keys for deterministic output
+	sort.Strings(keys)
 	return keys
 }

@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -51,9 +50,9 @@ func watchOnce() {
 
 	// targetGame represents the game we are interested in tracking.
 	targetGame := store.TargetGame{
-		Gym:      "Seattle Central College #1", // TODO: Make this configurable
-		Type:     "Saturday Morning Hoops",     
-		Level:    "Recreational-CoEd",       
+		Gym:   "Seattle Central College #1", // TODO: Make this configurable
+		Type:  "Saturday Morning Hoops",
+		Level: "Recreational-CoEd",
 	}
 
 	// Parse the required games' status from the HTML data.
@@ -119,6 +118,5 @@ func shutdownGracefully(c *cron.Cron) {
 func gameStatusChanged(prev, curr *store.GameStatus) bool {
 	return prev.Found != curr.Found ||
 		prev.IsFull != curr.IsFull ||
-		prev.TotalPlayers != curr.TotalPlayers ||
-		!reflect.DeepEqual(prev.Players, curr.Players)
+		prev.TotalPlayers != curr.TotalPlayers
 }
